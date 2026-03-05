@@ -23,7 +23,7 @@ class DBLogHandler(logging.Handler):
         self.user_id = user_id
 
     def emit(self, record: logging.LogRecord) -> None:
-        # emit() viene chiamata automaticamente da Python ad ogni log
+        # emit() viene chiamata automaticamente da Python a ogni log
         try:
             saveLog(
                 session_id=self.session_id,

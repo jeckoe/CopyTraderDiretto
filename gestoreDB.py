@@ -1,8 +1,10 @@
 import sqlite3
 from User import User
 from datetime import datetime
+import logging
 
-CONST_PATH_DB = "C:\\Users\\JMAX760\\Desktop\\Cose\\Progetti Vari\\CopyTraderDiretto\\diretto.db"
+logger = logging.getLogger(__name__)
+CONST_PATH_DB = "diretto.db"
 isDBStarted = False
 connection = None
 
@@ -58,24 +60,28 @@ def getTelegramConfig(usr) -> tuple:
 def saveSession(utente, session_string) -> None:
     startDB()
     global connection
+
+    # Verifica che il record esista per quell'utente
     row = connection.execute(
-        "SELECT SESSION_STRING FROM TCONFIG WHERE ID_UTENTE = ?",
+        "SELECT ID_UTENTE FROM TCONFIG WHERE ID_UTENTE = ?",
         (utente.ID,)
     ).fetchone()
 
     if row is None:
-        connection.execute(
-            "INSERT INTO TCONFIG(API_ID, API_HASH, TEL_NUMBER, SESSION_NAME, ID_UTENTE, SESSION_STRING) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (utente.API_ID, utente.API_HASH, utente.TEL_NUMBER,
-             utente.SESSION_NAME, utente.ID, session_string)
-        )
-    elif row[0] != session_string:
-        connection.execute(
-            "UPDATE TCONFIG SET SESSION_STRING = ? WHERE ID_UTENTE = ?",
-            (session_string, utente.ID)
-        )
+        # Non esiste ancora nessuna riga per questo utente
+        logger.error(f"saveSession: nessun record in TCONFIG per ID_UTENTE={utente.ID}")
+        return
+
+    result = connection.execute(
+        "UPDATE TCONFIG SET SESSION_STRING = ? WHERE ID_UTENTE = ?",
+        (session_string, utente.ID)
+    )
     connection.commit()
+
+    if result.rowcount == 0:
+        logger.error(f"saveSession: UPDATE non ha modificato nessuna riga per ID_UTENTE={utente.ID}")
+    else:
+        logger.info(f"saveSession: SESSION_STRING aggiornata per ID_UTENTE={utente.ID}")
 
 
 # ──────────────────────────────────────────────

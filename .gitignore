@@ -1,0 +1,6 @@
+# Project exclude paths
+/.venv/
+/diretto.db
+/SQLite3/
+/OLD/
+/.vscode/
