@@ -249,3 +249,13 @@ def saveLog(session_id: str, level: str, module: str,
         (user_id, session_id, level, module, message, datetime.now().isoformat())
     )
     connection.commit()
+
+
+def usernameExists(username: str) -> bool:
+    """Controlla se uno username è già registrato, indipendentemente dalla password."""
+    startDB()
+    global connection
+    result = connection.execute(
+        "SELECT ID_UTENTE FROM USERS WHERE USERNAME = ?", (username,)
+    ).fetchone()
+    return result is not None

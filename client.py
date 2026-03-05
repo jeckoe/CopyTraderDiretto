@@ -3,6 +3,7 @@ from pyrogram import Client
 from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential, RetryError
 
 from User import User
+from gestoreDB import saveSession
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +16,15 @@ def build_client(usr: User) -> Client:
         api_hash=usr.API_HASH,
         phone_number=usr.TEL_NUMBER,
         in_memory=True,
-        session_string=usr.SESSION_STRING
+        session_string=usr.SESSION_STRING or None  # stringa vuota → None → login interattivo
     )
 
 
 async def connect(usr: User, max_retries: int = 5) -> Client | None:
     """
     Tenta la connessione fino a max_retries volte.
+    Se SESSION_STRING è vuota, Pyrogram chiede OTP via console automaticamente.
+    Dopo il login salva la session string nel DB per i run successivi.
     Ritorna il Client connesso, oppure None se tutti i tentativi falliscono.
     """
     try:
@@ -36,6 +39,11 @@ async def connect(usr: User, max_retries: int = 5) -> Client | None:
             with attempt:
                 app = build_client(usr)
                 await app.start()
+
+                # Esporta e salva la sessione ad ogni login riuscito
+                session_string = await app.export_session_string()
+                saveSession(usr, session_string)
+
                 return app
 
     except RetryError:

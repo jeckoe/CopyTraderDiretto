@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 
-from gestoreDB import getUser, getTelegramConfig, registerUser, saveTelegramConfig, saveLog
+from gestoreDB import getUser, getTelegramConfig, registerUser, saveTelegramConfig, saveLog, usernameExists
 from client import connect
 from listener import start_listener
 
@@ -50,13 +50,10 @@ def setup_logging(session_id: str, user_id: int | None = None) -> None:
 # ──────────────────────────────────────────────
 # Flusso primo setup (utente non esiste ancora)
 # ──────────────────────────────────────────────
-def first_setup() -> None:
-    """
-    Guida l'utente nella registrazione e nel primo inserimento
-    della configurazione Telegram via console.
-    """
+def first_setup(username: str = "") -> None:
     print("\n=== PRIMO SETUP ===")
-    username = input("Username: ")
+    if not username:
+        username = input("Username: ")
     password = input("Password: ")
     api_id = int(input("Telegram API_ID: "))
     api_hash = input("Telegram API_HASH: ")
@@ -71,14 +68,22 @@ def first_setup() -> None:
 # Entrypoint
 # ──────────────────────────────────────────────
 async def main():
-    session_id = str(uuid.uuid4())  # ID univoco per questa esecuzione
+    session_id = str(uuid.uuid4())
 
-    # Tenta il login — se l'utente non esiste offre il primo setup
-    try:
-        usr, ok = getTelegramConfig(getUser('andrea2', '123'))
-    except ValueError:
+    username = input("Username: ")
+
+    # Controlla subito se lo username esiste
+    if not usernameExists(username):
         print("[INFO] Utente non trovato.")
-        first_setup()
+        first_setup(username)  # passa lo username già inserito
+        return
+
+    password = input("Password: ")
+
+    try:
+        usr, ok = getTelegramConfig(getUser(username, password))
+    except ValueError:
+        print("[ERRORE] Password errata.")
         return
 
     setup_logging(session_id, user_id=usr.ID)
