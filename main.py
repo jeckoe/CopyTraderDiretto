@@ -10,12 +10,26 @@ from scanner import scan_and_save
 
 
 class DBLogHandler(logging.Handler):
+    # Moduli e prefissi che vogliamo salvare nel DB
+    _ALLOWED_MODULES = {"__main__", "analyzer", "listener", "client", "scanner"}
+    _ALLOWED_PREFIXES = ("[LISTENER]", "[SIGNAL]", "[ANALYZER]", "[SCANNER]")
+
     def __init__(self, session_id: str, user_id: int | None = None):
         super().__init__()
         self.session_id = session_id
         self.user_id = user_id
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Salva sempre errori e warning
+        if record.levelno >= logging.WARNING:
+            self._save(record)
+            return
+
+        # Per i livelli INFO/DEBUG, salva solo i nostri moduli
+        if record.name in self._ALLOWED_MODULES:
+            self._save(record)
+
+    def _save(self, record: logging.LogRecord) -> None:
         try:
             saveLog(
                 session_id=self.session_id,
