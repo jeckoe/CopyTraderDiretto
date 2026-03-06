@@ -260,3 +260,23 @@ def usernameExists(username: str) -> bool:
         "SELECT ID_UTENTE FROM USERS WHERE USERNAME = ?", (username,)
     ).fetchone()
     return result is not None
+
+
+def saveSignal(usr: User, dialog_id: str, sender_id: str | None, signal) -> int:
+    """Salva un segnale e i suoi TP. Ritorna l'ID del segnale inserito."""
+    startDB()
+    global connection
+    cursor = connection.execute(
+        "INSERT INTO SIGNALS(ID_UTENTE, DIALOG_ID, SENDER_ID, SYMBOL, ACTION, "
+        "ENTRY, SL, RAW_TEXT, RECEIVED_AT) VALUES (?,?,?,?,?,?,?,?,?)",
+        (usr.ID, dialog_id, sender_id, signal.symbol, signal.action,
+         signal.entry, signal.sl, signal.raw_text, datetime.now().isoformat())
+    )
+    signal_id = cursor.lastrowid
+    for i, price in enumerate(signal.tp, start=1):
+        connection.execute(
+            "INSERT INTO SIGNAL_TP(SIGNAL_ID, LEVEL, PRICE) VALUES (?,?,?)",
+            (signal_id, i, price)
+        )
+    connection.commit()
+    return signal_id

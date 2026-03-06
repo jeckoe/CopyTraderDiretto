@@ -2,6 +2,7 @@
 import logging
 from pyrogram import Client, idle
 from pyrogram.handlers import MessageHandler
+from gestoreDB import saveSignal
 
 from User import User
 from analyzer import analyze
@@ -38,7 +39,7 @@ def build_message_handler(usr: User):
             print(f"   TP     : {signal.tp}")
             print(f"   Chat   : {signal.source_chat_id}")
             print(f"   Time   : {signal.timestamp}")
-
+            saveSignal(usr, chat_id, sender_id, signal)
             logger.info(
                 f"[SIGNAL] symbol={signal.symbol} action={signal.action} "
                 f"entry={signal.entry} sl={signal.sl} tp={signal.tp} "

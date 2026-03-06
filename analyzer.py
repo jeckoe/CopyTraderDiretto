@@ -6,8 +6,10 @@ from gestoreDB import getActiveDialogs, getSignalKeywords, getSkipKeywords, save
 from signal_model import Signal
 
 logger = logging.getLogger(__name__)
-
 _active_dialogs: dict[str, dict] = {}
+
+# Tipi che NON sono azioni — esclusi quando si cercano le azioni
+_NON_ACTION_TYPES = {"ENTRY", "SL", "TP", "CLOSE", "IGNORE"}
 
 
 def load_active_dialogs(usr: User) -> None:
@@ -63,13 +65,19 @@ def _parse_with_keywords(text: str, usr: User, dialog_pk: int | None, chat_id: s
 
     for line in lines:
         if action is None:
-            for ktype in ("BUY", "SELL", "BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP"):
-                if any(kw in line for kw in keywords.get(ktype, [])):
+            action_kw_list = [
+                (kw, ktype)
+                for ktype in keywords if ktype not in _NON_ACTION_TYPES
+                for kw in keywords.get(ktype, [])
+            ]
+            action_kw_list.sort(key=lambda x: len(x[0]), reverse=True)
+            for kw, ktype in action_kw_list:
+                if kw in line:
                     action = ktype
                     break
 
         if symbol is None:
-            match = re.search(r'\b[A-Z]{2,10}\b', line.upper())
+            match = re.search(r'\b[A-Z][A-Z0-9]{1,9}\b', line.upper())
             if match:
                 candidate = match.group()
                 all_kw = [k for lst in keywords.values() for k in lst]
@@ -107,14 +115,10 @@ def _parse_with_pattern(text: str, pattern: str, chat_id: str,
     """
     keywords = getSignalKeywords(usr, dialog_pk)
 
-    # Costruisce la lista di tutte le keyword di azione conosciute
-    # ordinate dalla più lunga alla più corta per evitare match parziali
-    # (es. "buy limit" deve essere trovato prima di "buy")
-    action_types = ("BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP", "BUY", "SELL")
     action_keywords = []
-    for ktype in action_types:
-        for kw in keywords.get(ktype, []):
-            action_keywords.append(kw)
+    for ktype in keywords:
+        if ktype not in _NON_ACTION_TYPES:
+            action_keywords.extend(keywords[ktype])
     action_keywords.sort(key=len, reverse=True)
 
     if not action_keywords:
@@ -124,15 +128,19 @@ def _parse_with_pattern(text: str, pattern: str, chat_id: str,
     # Regex per {ACTION} costruita dalle keyword dell'utente
     action_pattern = "|".join(re.escape(kw) for kw in action_keywords)
 
+    # TODO aggiungere la stessa cosa fatta per le ACTION anche per il SYMBOL in modo dinamico dal DB configurato
     placeholders = {
         "{SYMBOL}": r"(?P<SYMBOL>[A-Z]{2,10})",
         "{ACTION}": rf"(?P<ACTION>{action_pattern})",
         "{ENTRY}": r"(?P<ENTRY>[0-9]+(?:\.[0-9]+)?)",
         "{SL}": r"(?P<SL>[0-9]+(?:\.[0-9]+)?)",
-        "{IGNORE}": r".*?",
+        "{IGNORE}": r".*",
     }
 
     regex = re.escape(pattern)
+    regex = regex.replace('\\ ', r'\s+')  # spazio escaped → \s+
+    regex = regex.replace('\\\n', r'\s+')  # newline escaped → \s+
+
     tp_count = pattern.count("{TP}")
 
     for i in range(1, tp_count + 1):
