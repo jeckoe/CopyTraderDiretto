@@ -1,29 +1,11 @@
-# analyzer.py
-import re
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime
+import re
 
 from User import User
 from gestoreDB import getActiveDialogs, getSignalKeywords, getSkipKeywords, saveUnrecognized
+from signal_model import Signal
 
 logger = logging.getLogger(__name__)
-
-
-# ──────────────────────────────────────────────
-# Signal — temporaneo qui, verrà spostato in signal_model.py
-# ──────────────────────────────────────────────
-@dataclass
-class Signal:
-    symbol: str
-    action: str
-    entry: float | None
-    sl: float | None
-    tp: list[float]
-    raw_text: str
-    source_chat_id: str
-    timestamp: datetime = field(default_factory=datetime.now)
-
 
 # ──────────────────────────────────────────────
 # Cache chat attive — ricaricata all'avvio

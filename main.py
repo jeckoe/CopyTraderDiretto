@@ -2,28 +2,20 @@ import asyncio
 import logging
 import uuid
 
-from gestoreDB import getUser, getTelegramConfig, registerUser, saveTelegramConfig, saveLog, usernameExists
+from analyzer import load_active_dialogs
 from client import connect
+from gestoreDB import getUser, getTelegramConfig, registerUser, saveTelegramConfig, saveLog, usernameExists
 from listener import start_listener
+from scanner import scan_and_save
 
 
-# ──────────────────────────────────────────────
-# Handler custom: scrive i log nel DB SQLite
-# ──────────────────────────────────────────────
 class DBLogHandler(logging.Handler):
-    """
-    logging.Handler è la classe base di Python per "destinatari" del log.
-    Estendendola, possiamo fare in modo che ogni log.info() / log.warning()
-    venga scritto automaticamente nel DB invece che solo a schermo.
-    """
-
     def __init__(self, session_id: str, user_id: int | None = None):
         super().__init__()
         self.session_id = session_id
         self.user_id = user_id
 
     def emit(self, record: logging.LogRecord) -> None:
-        # emit() viene chiamata automaticamente da Python a ogni log
         try:
             saveLog(
                 session_id=self.session_id,
@@ -33,7 +25,7 @@ class DBLogHandler(logging.Handler):
                 user_id=self.user_id
             )
         except Exception:
-            pass  # il logger non deve mai crashare il programma principale
+            pass
 
 
 def setup_logging(session_id: str, user_id: int | None = None) -> None:
@@ -41,15 +33,12 @@ def setup_logging(session_id: str, user_id: int | None = None) -> None:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.StreamHandler(),  # → console
-            DBLogHandler(session_id, user_id)  # → DB
+            logging.StreamHandler(),
+            DBLogHandler(session_id, user_id)
         ]
     )
 
 
-# ──────────────────────────────────────────────
-# Flusso primo setup (utente non esiste ancora)
-# ──────────────────────────────────────────────
 def first_setup(username: str = "") -> None:
     print("\n=== PRIMO SETUP ===")
     if not username:
@@ -64,18 +53,14 @@ def first_setup(username: str = "") -> None:
     print(f"\nUtente '{username}' registrato. Al prossimo avvio verrà richiesto il codice OTP da Telegram.")
 
 
-# ──────────────────────────────────────────────
-# Entrypoint
-# ──────────────────────────────────────────────
 async def main():
     session_id = str(uuid.uuid4())
 
     username = input("Username: ")
 
-    # Controlla subito se lo username esiste
     if not usernameExists(username):
         print("[INFO] Utente non trovato.")
-        first_setup(username)  # passa lo username già inserito
+        first_setup(username)
         return
 
     password = input("Password: ")
@@ -98,7 +83,13 @@ async def main():
         logger.error("Impossibile connettersi a Telegram. Programma terminato.")
         return
 
-    await start_listener(app)
+    totale, nuovi = await scan_and_save(app, usr.ID)
+    print(f"[SCANNER] Scan completato. {totale} dialog totali, {nuovi} nuovi trovati.")
+    if nuovi > 0:
+        print("[SCANNER] Attiva i nuovi dialog impostando IS_ACTIVE = 1 nel DB.")
+
+    load_active_dialogs(usr)
+    await start_listener(app, usr)  # ← usr passato correttamente
 
 
 if __name__ == "__main__":

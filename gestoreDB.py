@@ -1,7 +1,8 @@
-import sqlite3
-from User import User
-from datetime import datetime
 import logging
+import sqlite3
+from datetime import datetime
+
+from User import User
 
 logger = logging.getLogger(__name__)
 CONST_PATH_DB = "diretto.db"
@@ -87,26 +88,26 @@ def saveSession(utente, session_string) -> None:
 # ──────────────────────────────────────────────
 # Dialog
 # ──────────────────────────────────────────────
-def insertDialog(ID, chat) -> None:
+def insertDialog(ID, chat) -> bool:
     startDB()
     global connection
-    # INSERT OR IGNORE evita duplicati grazie al UNIQUE (ID_UTENTE, DIALOG_ID)
-    connection.execute(
+    result = connection.execute(
         "INSERT OR IGNORE INTO DIALOGS(ID_UTENTE, TYPE, DIALOG_ID, DIALOG_NAME) VALUES (?, ?, ?, ?)",
         (ID, chat["tipo"], chat["id"], chat["nome"])
     )
     connection.commit()
+    return result.rowcount > 0  # True = riga nuova, False = già esisteva
 
 
 def getActiveDialogs(usr: User) -> list[dict]:
-    """Ritorna solo i dialog con IS_ACTIVE = 1 per quell'utente."""
     startDB()
     global connection
     rows = connection.execute(
-        "SELECT ID, DIALOG_ID, DIALOG_NAME, TYPE FROM DIALOGS WHERE ID_UTENTE = ? AND IS_ACTIVE = 1",
+        "SELECT ID, DIALOG_ID, DIALOG_NAME, TYPE, SIGNAL_PATTERN FROM DIALOGS "
+        "WHERE ID_UTENTE = ? AND IS_ACTIVE = 1",
         (usr.ID,)
     ).fetchall()
-    return [{"pk": r[0], "dialog_id": r[1], "nome": r[2], "tipo": r[3]} for r in rows]
+    return [{"pk": r[0], "dialog_id": r[1], "nome": r[2], "tipo": r[3], "pattern": r[4]} for r in rows]
 
 
 # ──────────────────────────────────────────────
