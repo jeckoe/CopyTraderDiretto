@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS DIALOGS (
     DIALOG_NAME    TEXT,
     IS_ACTIVE      INTEGER NOT NULL DEFAULT 0,
     SIGNAL_PATTERN TEXT    DEFAULT NULL,
+    MT5_ACCOUNT_ID INTEGER DEFAULT NULL REFERENCES MT5_ACCOUNTS(ID),
     UNIQUE(ID_UTENTE, DIALOG_ID)
 );
 
@@ -103,7 +104,8 @@ CREATE TABLE IF NOT EXISTS MT5_ACCOUNTS (
     LOGIN     TEXT    NOT NULL,
     PASSWORD  TEXT    NOT NULL,
     SERVER    TEXT    NOT NULL,
-    LABEL     TEXT
+    LABEL     TEXT,
+    LOT_SIZE  REAL    NOT NULL DEFAULT 0.01
 );
 
 CREATE TABLE IF NOT EXISTS SYMBOLS (
@@ -116,6 +118,14 @@ CREATE TABLE IF NOT EXISTS SYMBOLS (
 """
 
 
+_MIGRATIONS = [
+    # Aggiunge LOT_SIZE a MT5_ACCOUNTS se manca (DB pre-esistenti)
+    "ALTER TABLE MT5_ACCOUNTS ADD COLUMN LOT_SIZE REAL NOT NULL DEFAULT 0.01",
+    # Aggiunge MT5_ACCOUNT_ID a DIALOGS se manca
+    "ALTER TABLE DIALOGS ADD COLUMN MT5_ACCOUNT_ID INTEGER REFERENCES MT5_ACCOUNTS(ID)",
+]
+
+
 def startDB(forceReset=False) -> None:
     global isDBStarted, connection
     if forceReset:
@@ -125,6 +135,13 @@ def startDB(forceReset=False) -> None:
         connection = sqlite3.connect(CONST_PATH_DB)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.executescript(_SCHEMA)
+        # Migrazioni incrementali: ignora errori se la colonna esiste già
+        for migration in _MIGRATIONS:
+            try:
+                connection.execute(migration)
+                connection.commit()
+            except sqlite3.OperationalError:
+                pass  # Colonna già presente
         isDBStarted = True
 
 
@@ -207,11 +224,15 @@ def getActiveDialogs(usr: User) -> list[dict]:
     startDB()
     global connection
     rows = connection.execute(
-        "SELECT ID, DIALOG_ID, DIALOG_NAME, TYPE, SIGNAL_PATTERN FROM DIALOGS "
+        "SELECT ID, DIALOG_ID, DIALOG_NAME, TYPE, SIGNAL_PATTERN, MT5_ACCOUNT_ID FROM DIALOGS "
         "WHERE ID_UTENTE = ? AND IS_ACTIVE = 1",
         (usr.ID,)
     ).fetchall()
-    return [{"pk": r[0], "dialog_id": r[1], "nome": r[2], "tipo": r[3], "pattern": r[4]} for r in rows]
+    return [
+        {"pk": r[0], "dialog_id": r[1], "nome": r[2], "tipo": r[3],
+         "pattern": r[4], "mt5_account_id": r[5]}
+        for r in rows
+    ]
 
 
 # ──────────────────────────────────────────────
@@ -364,6 +385,33 @@ def usernameExists(username: str) -> bool:
         "SELECT ID_UTENTE FROM USERS WHERE USERNAME = ?", (username,)
     ).fetchone()
     return result is not None
+
+
+def getMT5Accounts(usr: User, account_id: int | None = None) -> list[dict]:
+    """
+    Ritorna gli account MT5 dell'utente.
+    Se account_id è specificato, ritorna solo quell'account (lista con 0 o 1 elemento).
+    Campi: id, login, password, server, label, lot_size
+    """
+    startDB()
+    global connection
+    if account_id is not None:
+        rows = connection.execute(
+            "SELECT ID, LOGIN, PASSWORD, SERVER, LABEL, LOT_SIZE FROM MT5_ACCOUNTS "
+            "WHERE ID_UTENTE = ? AND ID = ?",
+            (usr.ID, account_id)
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT ID, LOGIN, PASSWORD, SERVER, LABEL, LOT_SIZE FROM MT5_ACCOUNTS "
+            "WHERE ID_UTENTE = ?",
+            (usr.ID,)
+        ).fetchall()
+    return [
+        {"id": r[0], "login": r[1], "password": r[2],
+         "server": r[3], "label": r[4], "lot_size": r[5]}
+        for r in rows
+    ]
 
 
 def getSymbols(usr: User, mt5_account_id: int | None = None) -> dict[str, str]:

@@ -5,7 +5,8 @@ from pyrogram.handlers import MessageHandler
 from gestoreDB import saveSignal
 
 from User import User
-from analyzer import analyze
+from analyzer import analyze, _active_dialogs
+from mt5_executor import execute_signal
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +32,17 @@ def build_message_handler(usr: User):
         signal = analyze(usr, chat_id, sender_id, text)
 
         if signal is not None:
-            print(f"\n🔔 SEGNALE TROVATO")
-            print(f"   Symbol : {signal.symbol}")
-            print(f"   Action : {signal.action}")
-            print(f"   Entry  : {signal.entry}")
-            print(f"   SL     : {signal.sl}")
-            print(f"   TP     : {signal.tp}")
-            print(f"   Chat   : {signal.source_chat_id}")
-            print(f"   Time   : {signal.timestamp}")
-            saveSignal(usr, chat_id, sender_id, signal)
             logger.info(
                 f"[SIGNAL] symbol={signal.symbol} action={signal.action} "
                 f"entry={signal.entry} sl={signal.sl} tp={signal.tp} "
                 f"chat={signal.source_chat_id}"
             )
+            saveSignal(usr, chat_id, sender_id, signal)
+
+            # Esecuzione su MT5
+            dialog = _active_dialogs.get(chat_id, {})
+            mt5_account_id = dialog.get("mt5_account_id")
+            execute_signal(usr, signal, mt5_account_id)
 
     return _on_message
 
