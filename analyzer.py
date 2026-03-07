@@ -2,7 +2,7 @@ import logging
 import re
 
 from User import User
-from gestoreDB import getActiveDialogs, getSignalKeywords, getSkipKeywords, saveUnrecognized
+from gestoreDB import getActiveDialogs, getSignalKeywords, getSkipKeywords, getSymbols, saveUnrecognized
 from signal_model import Signal
 
 logger = logging.getLogger(__name__)
@@ -77,12 +77,7 @@ def _parse_with_keywords(text: str, usr: User, dialog_pk: int | None, chat_id: s
                     break
 
         if symbol is None:
-            match = re.search(r'\b[A-Z][A-Z0-9]{1,9}\b', line.upper())
-            if match:
-                candidate = match.group()
-                all_kw = [k for lst in keywords.values() for k in lst]
-                if candidate.lower() not in all_kw:
-                    symbol = candidate
+            symbol = _find_symbol(line.upper(), keywords, usr)
 
         if entry is None and any(kw in line for kw in keywords.get("ENTRY", [])):
             entry = _extract_first_number(line)
@@ -128,9 +123,8 @@ def _parse_with_pattern(text: str, pattern: str, chat_id: str,
     # Regex per {ACTION} costruita dalle keyword dell'utente
     action_pattern = "|".join(re.escape(kw) for kw in action_keywords)
 
-    # TODO aggiungere la stessa cosa fatta per le ACTION anche per il SYMBOL in modo dinamico dal DB configurato
     placeholders = {
-        "{SYMBOL}": r"(?P<SYMBOL>[A-Z]{2,10})",
+        "{SYMBOL}": _build_symbol_pattern(usr),
         "{ACTION}": rf"(?P<ACTION>{action_pattern})",
         "{ENTRY}": r"(?P<ENTRY>[0-9]+(?:\.[0-9]+)?)",
         "{SL}": r"(?P<SL>[0-9]+(?:\.[0-9]+)?)",
@@ -185,6 +179,43 @@ def _parse_with_pattern(text: str, pattern: str, chat_id: str,
         raw_text=text,
         source_chat_id=chat_id
     )
+
+
+# ──────────────────────────────────────────────
+# Symbol helpers (TODO 2)
+# ──────────────────────────────────────────────
+def _find_symbol(line_upper: str, keywords: dict[str, list[str]], usr: User) -> str | None:
+    """
+    Cerca il simbolo in una riga di testo (già in MAIUSCOLO).
+    1. Prima cerca tra i SYMBOLS configurati nel DB (più preciso, supporta US30/NAS100/GOLD)
+    2. Fallback: regex generica [A-Z][A-Z0-9]{1,9} escludendo le keyword note
+    """
+    symbols = getSymbols(usr)
+    for sym_tg in sorted(symbols, key=len, reverse=True):
+        if re.search(r'\b' + re.escape(sym_tg) + r'\b', line_upper):
+            return sym_tg
+
+    all_kw = [k for lst in keywords.values() for k in lst]
+    match = re.search(r'\b[A-Z][A-Z0-9]{1,9}\b', line_upper)
+    if match:
+        candidate = match.group()
+        if candidate.lower() not in all_kw:
+            return candidate
+    return None
+
+
+def _build_symbol_pattern(usr: User) -> str:
+    """
+    Costruisce la regex per il placeholder {SYMBOL} nel pattern parser.
+    Se ci sono simboli configurati nel DB, li usa (supporta US30/NAS100).
+    Fallback: regex generica.
+    """
+    symbols = getSymbols(usr)
+    if not symbols:
+        return r"(?P<SYMBOL>[A-Z][A-Z0-9]{1,9})"
+    sorted_syms = sorted(symbols, key=len, reverse=True)
+    sym_pattern = "|".join(re.escape(s) for s in sorted_syms)
+    return rf"(?P<SYMBOL>{sym_pattern})"
 
 
 # ──────────────────────────────────────────────

@@ -9,6 +9,13 @@
 /.vscode/
 /.claude/
 
+# File interni — non destinati al repo pubblico
+/tests.py
+/CLAUDE.md
+/PROJECT_STATE.md
+/TASKS.md
+/TEST_PROMPT.md
+
 # Python cache
 __pycache__/
 *.pyc

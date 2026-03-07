@@ -366,6 +366,28 @@ def usernameExists(username: str) -> bool:
     return result is not None
 
 
+def getSymbols(usr: User, mt5_account_id: int | None = None) -> dict[str, str]:
+    """
+    Ritorna {SYMBOL_TG: SYMBOL_MT5} per l'utente dato.
+    Se mt5_account_id è specificato, filtra per quell'account MT5.
+    Chiavi sempre in maiuscolo per confronti case-insensitive.
+    """
+    startDB()
+    global connection
+    if mt5_account_id is not None:
+        rows = connection.execute(
+            "SELECT SYMBOL_TG, SYMBOL_MT5 FROM SYMBOLS "
+            "WHERE ID_UTENTE = ? AND MT5_ACCOUNT_ID = ?",
+            (usr.ID, mt5_account_id)
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "SELECT SYMBOL_TG, SYMBOL_MT5 FROM SYMBOLS WHERE ID_UTENTE = ?",
+            (usr.ID,)
+        ).fetchall()
+    return {r[0].upper(): r[1] for r in rows}
+
+
 def saveSignal(usr: User, dialog_id: str, sender_id: str | None, signal) -> int:
     """Salva un segnale e i suoi TP. Ritorna l'ID del segnale inserito."""
     startDB()
