@@ -1,7 +1,15 @@
 # Project exclude paths
 /.venv/
 /diretto.db
+/diretto.db-journal
+/diretto.db-wal
+/diretto.db-shm
 /SQLite3/
 /OLD/
 /.vscode/
-/tests.py
+/.claude/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
